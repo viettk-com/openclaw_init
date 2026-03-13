@@ -1,0 +1,116 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+      POSTGRES_USER: ${POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-litellm} -d ${POSTGRES_DB:-litellm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ai-internal
+
+  litellm:
+    image: ${LITELLM_IMAGE:-docker.litellm.ai/berriai/litellm:main-stable}
+    container_name: oc-litellm
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-litellm}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set in .env}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      STORE_MODEL_IN_DB: "True"
+      LITELLM_MODE: "PRODUCTION"
+      SEPARATE_HEALTH_APP: "1"
+      SEPARATE_HEALTH_PORT: "8001"
+      SUPERVISORD_STOPWAITSECS: "3600"
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "2"]
+    volumes:
+      - ./config/litellm-config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health/readiness', timeout=5).status == 200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+    expose:
+      - "4000"
+      - "8001"
+    ports:
+      - "${LITELLM_BIND_HOST:-127.0.0.1}:${LITELLM_PORT:-4000}:4000"
+      - "${LITELLM_BIND_HOST:-127.0.0.1}:${LITELLM_HEALTH_PORT:-8001}:8001"
+    networks:
+      - ai-internal
+
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: oc-openclaw-gateway
+    restart: unless-stopped
+    init: true
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+    command: ["node", "dist/index.js", "gateway", "--bind", "${OPENCLAW_GATEWAY_BIND:-lan}", "--port", "18789"]
+    volumes:
+      - ./data/openclaw/config:/home/node/.openclaw
+      - ./data/openclaw/workspace:/home/node/.openclaw/workspace
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${OPENCLAW_BIND_HOST:-127.0.0.1}:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BIND_HOST:-127.0.0.1}:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    networks:
+      - ai-internal
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: oc-openclaw-cli
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+    network_mode: "service:openclaw-gateway"
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      BROWSER: echo
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+    volumes:
+      - ./data/openclaw/config:/home/node/.openclaw
+      - ./data/openclaw/workspace:/home/node/.openclaw/workspace
+
+networks:
+  ai-internal:
+    name: ${COMPOSE_PROJECT_NAME:-openclaw-stack}_internal
+    driver: bridge
+    internal: false
