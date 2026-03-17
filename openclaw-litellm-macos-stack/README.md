@@ -140,6 +140,7 @@ docker compose run --rm openclaw-cli models set litellm/dlg-gpt-5-codex
 - Nếu muốn bật hoặc cập nhật bridge `LiteLLM -> CLIProxyAPI -> Codex OAuth`, chạy `./scripts/apply-cliproxyapi.sh`.
 - Khi `CLIPROXY_MANAGEMENT_KEY` có giá trị, web management của CLIProxyAPI sẽ mở local tại `http://127.0.0.1:8317/management.html`.
 - Management UI nên giữ `localhost-only`; stack này đang để `allow-remote: false`.
+- Sau khi bật một họ model alias mới như `dlg-*` hoặc `codex-oauth-*`, nên chạy lại `./scripts/generate-litellm-virtual-key.sh` và thay `LITELLM_API_KEY` trong `.env` nếu OpenClaw cần gọi các alias mới đó.
 
 ## 8) Gỡ stack
 

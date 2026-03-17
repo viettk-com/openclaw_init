@@ -44,3 +44,5 @@ wait_for_http "http://${OPENCLAW_BIND_HOST}:${OPENCLAW_GATEWAY_PORT}/readyz" 60 
 echo "Provider config applied."
 echo "LiteLLM: http://${LITELLM_BIND_HOST}:${LITELLM_PORT}/v1/models"
 echo "OpenClaw: http://${OPENCLAW_BIND_HOST}:${OPENCLAW_GATEWAY_PORT}/readyz"
+echo "If you enabled new alias families (for example DANGLAMGIAU_* or CLIPROXY_*), regenerate a LiteLLM virtual key before switching OpenClaw to those models:"
+echo "  ./scripts/generate-litellm-virtual-key.sh"
