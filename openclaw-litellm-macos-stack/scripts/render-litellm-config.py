@@ -17,7 +17,10 @@ def load_env(path: pathlib.Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in raw_line:
             continue
         key, value = raw_line.split("=", 1)
-        env[key.strip()] = value.strip()
+        parsed_value = value.strip()
+        if len(parsed_value) >= 2 and parsed_value[0] == parsed_value[-1] and parsed_value[0] in {"'", '"'}:
+            parsed_value = parsed_value[1:-1]
+        env[key.strip()] = parsed_value
     return env
 
 
@@ -61,6 +64,16 @@ anthropic_enabled = bool(env.get("ANTHROPIC_API_KEY", "").strip())
 minimax_enabled = bool(env.get("MINIMAX_API_KEY", "").strip())
 danglamgiau_api_key = env.get("DANGLAMGIAU_API_KEY", "").strip()
 danglamgiau_api_base = env.get("DANGLAMGIAU_API_BASE", "").strip()
+danglamgiau_user_agent = (
+    env.get(
+        "DANGLAMGIAU_USER_AGENT",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/134.0.0.0 Safari/537.36"
+        ),
+    ).strip()
+)
 danglamgiau_enabled = bool(danglamgiau_api_key and danglamgiau_api_base) and is_enabled(
     env.get("DANGLAMGIAU_ENABLE", "0")
 )
@@ -69,11 +82,36 @@ danglamgiau_model_prefix = (
 )
 danglamgiau_models: list[str] = []
 for raw_model in env.get(
-    "DANGLAMGIAU_MODELS", "gpt-5,gpt-5-codex,gpt-5.1-codex-max"
+    "DANGLAMGIAU_MODELS", "gpt-5,gpt-5-codex"
 ).split(","):
     model = raw_model.strip()
     if model and model not in danglamgiau_models:
         danglamgiau_models.append(model)
+claudible_api_key = env.get("CLAUDIBLE_API_KEY", "").strip()
+claudible_api_base = env.get("CLAUDIBLE_API_BASE", "").strip()
+claudible_user_agent = (
+    env.get(
+        "CLAUDIBLE_USER_AGENT",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/134.0.0.0 Safari/537.36"
+        ),
+    ).strip()
+)
+claudible_enabled = bool(claudible_api_key and claudible_api_base) and is_enabled(
+    env.get("CLAUDIBLE_ENABLE", "0")
+)
+claudible_model_prefix = (
+    env.get("CLAUDIBLE_MODEL_PREFIX", "claudible").strip() or "claudible"
+)
+claudible_models: list[str] = []
+for raw_model in env.get(
+    "CLAUDIBLE_MODELS", "claude-sonnet-4.6,claude-opus-4.6,claude-haiku-4.5"
+).split(","):
+    model = raw_model.strip()
+    if model and model not in claudible_models:
+        claudible_models.append(model)
 cliproxy_api_key = env.get("CLIPROXY_API_KEY", "").strip()
 cliproxy_api_base = env.get("CLIPROXY_API_BASE", "").strip()
 cliproxy_enabled = bool(cliproxy_api_key and cliproxy_api_base) and is_enabled(
@@ -84,7 +122,7 @@ cliproxy_model_prefix = (
 )
 cliproxy_models: list[str] = []
 for raw_model in env.get(
-    "CLIPROXY_MODELS", "gpt-5-codex,gpt-5.1-codex,gpt-5.1-codex-max"
+    "CLIPROXY_MODELS", "gpt-5.4,gpt-5.3-codex"
 ).split(","):
     model = raw_model.strip()
     if model and model not in cliproxy_models:
@@ -94,6 +132,7 @@ has_real_provider_keys = (
     or bool(active_openai_vars)
     or minimax_enabled
     or danglamgiau_enabled
+    or claudible_enabled
     or cliproxy_enabled
 )
 
@@ -105,11 +144,15 @@ if active_openai_vars:
     lines.append("# Active OpenAI key env vars: " + ", ".join(active_openai_vars))
 if len(active_openai_vars) > 1:
     lines.append(
-        "# LiteLLM will load-balance across repeated gpt-5.4 and gpt-5.1-codex deployments."
+        "# LiteLLM will load-balance across repeated openai-gpt-5-4 deployments."
     )
 if danglamgiau_enabled:
     lines.append(
         "# DangLamGiau marketplace enabled; LiteLLM will expose dlg-* aliases backed by https://danglamgiau.com/v1."
+    )
+if claudible_enabled:
+    lines.append(
+        "# Claudible enabled; LiteLLM will expose claudible-* aliases backed by https://claudible.io/v1."
     )
 if cliproxy_enabled:
     lines.append(
@@ -137,14 +180,9 @@ if active_openai_vars:
     for name in active_openai_vars:
         lines.extend(
             [
-                "  - model_name: gpt-5.4",
+                "  - model_name: openai-gpt-5-4",
                 "    litellm_params:",
                 "      model: openai/gpt-5.4",
-                f"      api_key: os.environ/{name}",
-                "",
-                "  - model_name: gpt-5.1-codex",
-                "    litellm_params:",
-                "      model: openai/gpt-5.1-codex",
                 f"      api_key: os.environ/{name}",
                 "",
             ]
@@ -152,14 +190,9 @@ if active_openai_vars:
 else:
     lines.extend(
         [
-            "  - model_name: gpt-5.4",
+            "  - model_name: openai-gpt-5-4",
             "    litellm_params:",
             "      model: openai/gpt-5.4",
-            "      api_key: os.environ/OPENAI_API_KEY",
-            "",
-            "  - model_name: gpt-5.1-codex",
-            "    litellm_params:",
-            "      model: openai/gpt-5.1-codex",
             "      api_key: os.environ/OPENAI_API_KEY",
             "",
         ]
@@ -193,6 +226,24 @@ if danglamgiau_enabled:
                 f"      model: openai/{upstream_model}",
                 "      api_base: os.environ/DANGLAMGIAU_API_BASE",
                 "      api_key: os.environ/DANGLAMGIAU_API_KEY",
+                "      extra_headers:",
+                f'        User-Agent: "{danglamgiau_user_agent}"',
+                "",
+            ]
+        )
+
+if claudible_enabled:
+    for upstream_model in claudible_models:
+        alias_suffix = upstream_model.replace("/", "-").replace(".", "-")
+        lines.extend(
+            [
+                f"  - model_name: {claudible_model_prefix}-{alias_suffix}",
+                "    litellm_params:",
+                f"      model: openai/{upstream_model}",
+                "      api_base: os.environ/CLAUDIBLE_API_BASE",
+                "      api_key: os.environ/CLAUDIBLE_API_KEY",
+                "      extra_headers:",
+                f'        User-Agent: "{claudible_user_agent}"',
                 "",
             ]
         )
@@ -200,16 +251,21 @@ if danglamgiau_enabled:
 if cliproxy_enabled:
     for upstream_model in cliproxy_models:
         alias_suffix = upstream_model.replace("/", "-").replace(".", "-")
-        lines.extend(
-            [
-                f"  - model_name: {cliproxy_model_prefix}-{alias_suffix}",
-                "    litellm_params:",
-                f"      model: openai/{upstream_model}",
-                "      api_base: os.environ/CLIPROXY_API_BASE",
-                "      api_key: os.environ/CLIPROXY_API_KEY",
-                "",
-            ]
-        )
+        alias_names = [f"{cliproxy_model_prefix}-{alias_suffix}"]
+        if upstream_model in {"gpt-5.4", "gpt-5.3-codex"}:
+            alias_names.insert(0, upstream_model)
+
+        for alias_name in alias_names:
+            lines.extend(
+                [
+                    f"  - model_name: {alias_name}",
+                    "    litellm_params:",
+                    f"      model: openai/{upstream_model}",
+                    "      api_base: os.environ/CLIPROXY_API_BASE",
+                    "      api_key: os.environ/CLIPROXY_API_KEY",
+                    "",
+                ]
+            )
 
 lines.extend(
     [
@@ -243,4 +299,5 @@ else:
     print("OpenAI deployments: placeholder via OPENAI_API_KEY")
 print(f"Anthropic enabled: {'yes' if anthropic_enabled else 'no'}")
 print(f"DangLamGiau enabled: {'yes' if danglamgiau_enabled else 'no'}")
+print(f"Claudible enabled: {'yes' if claudible_enabled else 'no'}")
 print(f"CLIProxyAPI enabled: {'yes' if cliproxy_enabled else 'no'}")

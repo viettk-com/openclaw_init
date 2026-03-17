@@ -10,6 +10,7 @@ Nó được thiết kế cho macOS, nhưng Compose này cũng chạy được t
 - `config/openclaw.json` — OpenClaw cấu hình provider LiteLLM + Telegram
 - `config/litellm-config.yaml` — LiteLLM cấu hình OpenAI + Anthropic + MiniMax
 - `scripts/discover-danglamgiau-models.sh` — gọi trực tiếp `GET /v1/models` của danglamgiau để chốt model ids trước khi bật alias
+- `scripts/discover-claudible-models.sh` — gọi trực tiếp `GET /v1/models` của Claudible để chốt catalog Claude trước khi bật alias
 - `config/cliproxyapi-config.yaml` — CLIProxyAPI host config được render từ `.env` tại máy local và không nên commit
 - `scripts/generate-litellm-virtual-key.sh` — tạo virtual key riêng cho OpenClaw
 - `scripts/render-litellm-config.py` — render LiteLLM config từ `.env`, hỗ trợ nhiều `OPENAI_API_KEY_*`
@@ -17,6 +18,8 @@ Nó được thiết kế cho macOS, nhưng Compose này cũng chạy được t
 - `scripts/render-cliproxy-config.py` — render CLIProxyAPI config host-side từ `.env`
 - `scripts/sync-cliproxy-codex-auth.py` — import session Codex từ `~/.codex/auth.json` sang auth-dir của CLIProxyAPI
 - `scripts/apply-cliproxyapi.sh` — cài `cliproxyapi` trên macOS, sync auth và nối LiteLLM -> CLIProxyAPI
+- `scripts/apply-claude-code.sh` — build lại image OpenClaw có kèm Claude Code CLI và verify binary trong container
+- `scripts/claude-code.sh` — chạy lệnh `claude ...` trực tiếp bên trong gateway container
 - `scripts/test-model.sh` — smoke test 1 lệnh cho GPT, MiniMax, CLIProxyAPI và Telegram end-to-end
 - `data/*` — thư mục bind mount local cho OpenClaw / Postgres
 
@@ -28,6 +31,7 @@ cp config/openclaw.json data/openclaw/config/openclaw.json
 ```
 
 Sau đó sửa `.env`:
+- tùy chọn giữ `CLAUDE_CODE_TARGET=stable` để image OpenClaw cài đúng channel Claude Code ổn định
 - điền `OPENAI_API_KEY`
 - nếu có nhiều OpenAI key, điền thêm `OPENAI_API_KEY_2`, `OPENAI_API_KEY_3`, ...
 - điền `ANTHROPIC_API_KEY`
@@ -36,13 +40,21 @@ Sau đó sửa `.env`:
   - `DANGLAMGIAU_ENABLE=1`
   - `DANGLAMGIAU_API_KEY`
   - tùy chọn giữ `DANGLAMGIAU_API_BASE=https://danglamgiau.com/v1`
-  - tùy chọn chỉnh `DANGLAMGIAU_MODELS=gpt-5,gpt-5-codex,gpt-5.1-codex-max`
+  - tùy chọn giữ `DANGLAMGIAU_USER_AGENT` như mặc định trong `.env.example`; upstream này hiện chặn Python fingerprint mặc định nếu bỏ header này
+  - tùy chọn chỉnh `DANGLAMGIAU_MODELS=gpt-5,gpt-5-codex,deepseek-3-2,claude-sonnet-4-6,claude-sonnet-4-6-thinking,claude-opus-4-6,claude-opus-4-6-thinking`
   - khuyến nghị chạy `./scripts/discover-danglamgiau-models.sh` trước để xem model ids thực tế từ `/v1/models`
+- nếu muốn bật `Claudible` như một upstream Claude-focused phía sau LiteLLM, điền:
+  - `CLAUDIBLE_ENABLE=1`
+  - `CLAUDIBLE_API_KEY`
+  - tùy chọn giữ `CLAUDIBLE_API_BASE=https://claudible.io/v1`
+  - tùy chọn giữ `CLAUDIBLE_USER_AGENT` như mặc định trong `.env.example`; upstream này hiện cũng chặn Python fingerprint mặc định nếu bỏ header này
+  - tùy chọn giữ `CLAUDIBLE_MODELS=claude-sonnet-4.6,claude-opus-4.6,claude-haiku-4.5`
+  - khuyến nghị chạy `./scripts/discover-claudible-models.sh` trước để xem catalog thực tế từ `/v1/models`
 - nếu muốn bật bridge OAuth/subscription qua CLIProxyAPI, điền:
   - `CLIPROXY_ENABLE=1`
   - `CLIPROXY_API_KEY`
   - `CLIPROXY_API_BASE=http://host.docker.internal:8317/v1`
-  - tùy chọn `CLIPROXY_MODELS=gpt-5-codex,gpt-5.1-codex,gpt-5.1-codex-max`
+  - tùy chọn `CLIPROXY_MODELS=gpt-5.4,gpt-5.3-codex`
   - nếu muốn bật web management/login local, điền thêm `CLIPROXY_MANAGEMENT_KEY`
 - điền `TELEGRAM_BOT_TOKEN`
 - đổi `POSTGRES_PASSWORD`
@@ -103,30 +115,39 @@ Pairing code sẽ xuất hiện khi bạn DM bot trên Telegram lần đầu.
 
 ## 6) Chọn model mặc định
 
-Stack này tự chọn model mặc định:
-- `litellm/MiniMax-M2.5` nếu có `MINIMAX_API_KEY`
-- `litellm/dlg-gpt-5-codex` nếu bạn chủ động đổi sang alias danglamgiau sau khi bật provider này
-- `litellm/gpt-5.1-codex` nếu có OpenAI key nhưng không có MiniMax
-- `litellm/claude-opus-4-6` nếu không có MiniMax/OpenAI
+Stack này đang đặt mặc định:
+- `litellm/gpt-5.4`
+
+Trong cấu hình hiện tại, alias `gpt-5.4` được ưu tiên map sang `CLIProxyAPI / Codex OAuth`, không còn đi vào OpenAI direct alias mặc định.
 
 Nếu đã bật CLIProxyAPI, LiteLLM sẽ thêm các alias:
-- `codex-oauth-gpt-5-codex`
-- `codex-oauth-gpt-5-1-codex`
-- `codex-oauth-gpt-5-1-codex-max`
+- `gpt-5.4`
+- `gpt-5.3-codex`
+- và alias debug tương ứng `codex-oauth-gpt-5-4`, `codex-oauth-gpt-5-3-codex`
+
+Nếu đã bật Claudible, LiteLLM sẽ thêm các alias:
+- `claudible-claude-sonnet-4-6`
+- `claudible-claude-opus-4-6`
+- `claudible-claude-haiku-4-5`
 
 Muốn đổi sang GPT:
 ```bash
-docker compose run --rm openclaw-cli models set litellm/gpt-5.1-codex
+docker compose run --rm openclaw-cli models set litellm/gpt-5.4
 ```
 
-Muốn đổi sang Codex OAuth qua CLIProxyAPI:
+Muốn đổi sang GPT-5.3 Codex qua CLIProxyAPI:
 ```bash
-docker compose run --rm openclaw-cli models set litellm/codex-oauth-gpt-5-1-codex
+docker compose run --rm openclaw-cli models set litellm/gpt-5.3-codex
 ```
 
 Muốn đổi sang danglamgiau sau khi đã thêm key:
 ```bash
 docker compose run --rm openclaw-cli models set litellm/dlg-gpt-5-codex
+```
+
+Muốn đổi sang Claudible sau khi đã thêm key:
+```bash
+docker compose run --rm openclaw-cli models set litellm/claudible-claude-sonnet-4-6
 ```
 
 ## 7) Lưu ý vận hành
@@ -137,10 +158,13 @@ docker compose run --rm openclaw-cli models set litellm/dlg-gpt-5-codex
 - `openclaw-cli` dùng `network_mode: service:openclaw-gateway` để bám theo flow Compose chính thức của OpenClaw.
 - Sau khi thêm hoặc đổi nhiều `OPENAI_API_KEY_*`, chạy `./scripts/apply-provider-config.sh` để render lại `config/litellm-config.yaml` và restart `litellm + openclaw-gateway`.
 - Sau khi thêm hoặc đổi `DANGLAMGIAU_*`, cũng dùng cùng lệnh `./scripts/apply-provider-config.sh`.
+- Sau khi thêm hoặc đổi `CLAUDIBLE_*`, cũng dùng cùng lệnh `./scripts/apply-provider-config.sh`.
 - Nếu muốn bật hoặc cập nhật bridge `LiteLLM -> CLIProxyAPI -> Codex OAuth`, chạy `./scripts/apply-cliproxyapi.sh`.
+- Nếu muốn build/cập nhật `Claude Code CLI` trong gateway container, chạy `./scripts/apply-claude-code.sh`.
 - Khi `CLIPROXY_MANAGEMENT_KEY` có giá trị, web management của CLIProxyAPI sẽ mở local tại `http://127.0.0.1:8317/management.html`.
 - Management UI nên giữ `localhost-only`; stack này đang để `allow-remote: false`.
-- Sau khi bật một họ model alias mới như `dlg-*` hoặc `codex-oauth-*`, nên chạy lại `./scripts/generate-litellm-virtual-key.sh` và thay `LITELLM_API_KEY` trong `.env` nếu OpenClaw cần gọi các alias mới đó.
+- Sau khi bật một họ model alias mới như `dlg-*`, `claudible-*`, `gpt-5.4`, `gpt-5.3-codex`, hoặc `codex-oauth-*`, nên chạy lại `./scripts/generate-litellm-virtual-key.sh` và thay `LITELLM_API_KEY` trong `.env` nếu OpenClaw cần gọi các alias mới đó.
+- Bản hiện tại của `scripts/generate-litellm-virtual-key.sh` gọi local LiteLLM bằng Python thay vì `curl`, vì route `/key/generate` trên máy này thỉnh thoảng trả `empty reply` với `curl`.
 
 ## 8) Gỡ stack
 
@@ -166,9 +190,78 @@ Script sẽ:
 - test GPT qua LiteLLM
 - test MiniMax qua LiteLLM, kèm `reasoning_effort` để xác nhận `drop_params` đang hoạt động
 - test danglamgiau qua LiteLLM nếu đã bật `DANGLAMGIAU_ENABLE`
+- test Claudible qua LiteLLM nếu đã bật `CLAUDIBLE_ENABLE`
 - test CLIProxyAPI/Codex OAuth qua LiteLLM nếu đã bật `CLIPROXY_ENABLE`
 - test Telegram end-to-end bằng `openclaw agent --deliver`
 
 Ghi chú:
 - Nếu chưa pair Telegram, set `TELEGRAM_TARGET=<chat_id>` hoặc để script tự lấy user đầu tiên từ `telegram-allowFrom.json`
-- Có thể bỏ qua tạm một phần bằng `SKIP_GPT=1`, `SKIP_MINIMAX=1`, `SKIP_DANGLAMGIAU=1`, `SKIP_CLIPROXY=1`, hoặc `SKIP_TELEGRAM=1`
+- Có thể bỏ qua tạm một phần bằng `SKIP_GPT=1`, `SKIP_MINIMAX=1`, `SKIP_DANGLAMGIAU=1`, `SKIP_CLAUDIBLE=1`, `SKIP_CLIPROXY=1`, hoặc `SKIP_TELEGRAM=1`
+- Nếu muốn test chi tiết matrix provider, bật `DANGLAMGIAU_TEST_MATRIX=1` hoặc `CLAUDIBLE_TEST_MATRIX=1`
+
+## 10) Trạng thái Provider Hiện Tại
+
+### DangLamGiau
+
+- Đã bật và chạy được qua LiteLLM.
+- `DeepSeek 3.2`, `Claude Sonnet 4.6`, `Claude Sonnet 4.6 Thinking`, và `Claude Opus 4.6` đang pass.
+- `Claude Sonnet 4.6 Thinking` có `reasoning_content`, nên coi như có thinking thật ở mức runtime.
+- `Claude Opus 4.6 Thinking` hiện có trong catalog nhưng upstream đang trả `HTTP 200` với body rỗng; hiện không dùng làm primary.
+
+### Claudible
+
+- Đã bật và chạy được qua LiteLLM.
+- Các model catalog hiện tại: `claude-sonnet-4.6`, `claude-opus-4.6`, `claude-haiku-4.5`.
+- Cả ba model đều pass qua LiteLLM.
+- Hiện chưa thấy `thinking` riêng: docs vendor đánh dấu `reasoning: false`, `/v1/models` không trả model `thinking`, và runtime hiện không trả `reasoning_content`.
+
+## 11) CLI / VS Code / Claude Code: Trạng Thái Hiện Tại
+
+### Đang chạy được ngay
+
+- `OpenClaw CLI` của chính stack này đang chạy được qua service `openclaw-cli`.
+- Binary `openclaw` cũng có sẵn trong container gateway.
+- `openclaw acp` cũng có sẵn, nghĩa là upstream bridge ACP của OpenClaw có mặt trong runtime hiện tại.
+- `Claude Code CLI` hiện đã được bake vào image `openclaw-browser-local` và có symlink tuyệt đối tại `/usr/local/bin/claude`.
+- Vì `claude` đã có trên `PATH`, OpenClaw có thể dùng built-in backend mặc định cho `claude-cli/sonnet` hoặc `claude-cli/opus` mà không cần thêm key cấu hình mới.
+
+### Còn cần làm một lần sau khi boot stack
+
+- Chạy `./scripts/apply-claude-code.sh` sau khi đã có `.env` thật để rebuild/recreate gateway bằng image mới.
+- Chạy `./scripts/claude-code.sh auth login` một lần để đăng nhập Claude Code ngay trong container.
+- Sau khi login xong, có thể kiểm tra bằng `./scripts/claude-code.sh auth status`.
+
+### Kết luận thực dụng
+
+- `CLI`: `Claude Code CLI` đã bật theo đường built-in backend mặc định, không còn là trạng thái “chưa cấu hình”.
+- `VS Code`: upstream có đường ACP, nhưng stack hiện tại chưa cấu hình bridge/extension để dùng với VS Code.
+- `Claude Code`: dùng được trong stack này sau khi login, với model ids thực dụng là `claude-cli/sonnet` và `claude-cli/opus`.
+
+## 12) Cách dùng Claude Code trong OpenClaw
+
+Build/rebuild image có Claude Code:
+```bash
+./scripts/apply-claude-code.sh
+```
+
+Đăng nhập Claude Code ngay trong gateway container:
+```bash
+./scripts/claude-code.sh auth login
+./scripts/claude-code.sh auth status
+```
+
+Chuyển model mặc định của OpenClaw sang Claude Code:
+```bash
+docker compose run --rm openclaw-cli models set claude-cli/opus
+docker compose run --rm openclaw-cli models set claude-cli/sonnet
+```
+
+Ghi chú vận hành:
+- Auth/session của Claude Code được giữ trong `data/openclaw/claude`, nên không mất sau mỗi lần restart container.
+- Hướng tích hợp hiện tại là `OpenClaw CLI backend -> Claude Code CLI`, không phải `setup-token`.
+- CLI backends của OpenClaw là text-oriented; nếu sau này cần luồng coding harness/IDE sâu hơn thì cân nhắc đi tiếp sang ACP.
+
+Tham khảo chính thức:
+- `CLI Backends`: https://docs.openclaw.ai/cli/cli-backends
+- `ACP`: https://docs.openclaw.ai/cli/acp
+- `ACP Clients`: https://docs.openclaw.ai/use/acp-clients

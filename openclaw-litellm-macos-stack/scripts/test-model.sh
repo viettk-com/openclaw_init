@@ -10,7 +10,19 @@ wait_for_http() {
   local sleep_s="${3:-2}"
   local i
   for ((i = 1; i <= retries; i += 1)); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    if python3 - "$url" <<'PY' >/dev/null 2>&1
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        raise SystemExit(0 if 200 <= response.status < 300 else 1)
+except Exception:
+    raise SystemExit(1)
+PY
+    then
       return 0
     fi
     sleep "$sleep_s"
@@ -46,16 +58,29 @@ LITELLM_HEALTH_PORT="${LITELLM_HEALTH_PORT:-8001}"
 OPENCLAW_BIND_HOST="${OPENCLAW_BIND_HOST:-127.0.0.1}"
 OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 OPENCLAW_CONTAINER="${OPENCLAW_CONTAINER:-oc-openclaw-gateway}"
-GPT_MODEL="${GPT_MODEL:-gpt-5.1-codex}"
+GPT_MODEL="${GPT_MODEL:-gpt-5.4}"
 MINIMAX_MODEL="${MINIMAX_MODEL:-MiniMax-M2.5}"
 DANGLAMGIAU_MODEL_PREFIX="${DANGLAMGIAU_MODEL_PREFIX:-dlg}"
 DANGLAMGIAU_MODEL="${DANGLAMGIAU_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-gpt-5-codex}"
-CLIPROXY_MODEL="${CLIPROXY_MODEL:-codex-oauth-gpt-5-1-codex}"
+DANGLAMGIAU_DEEPSEEK_MODEL="${DANGLAMGIAU_DEEPSEEK_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-deepseek-3-2}"
+DANGLAMGIAU_SONNET_MODEL="${DANGLAMGIAU_SONNET_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-claude-sonnet-4-6}"
+DANGLAMGIAU_SONNET_THINKING_MODEL="${DANGLAMGIAU_SONNET_THINKING_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-claude-sonnet-4-6-thinking}"
+DANGLAMGIAU_OPUS_MODEL="${DANGLAMGIAU_OPUS_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-claude-opus-4-6}"
+DANGLAMGIAU_OPUS_THINKING_MODEL="${DANGLAMGIAU_OPUS_THINKING_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-claude-opus-4-6-thinking}"
+DANGLAMGIAU_TEST_MATRIX="${DANGLAMGIAU_TEST_MATRIX:-0}"
+CLAUDIBLE_MODEL_PREFIX="${CLAUDIBLE_MODEL_PREFIX:-claudible}"
+CLAUDIBLE_MODEL="${CLAUDIBLE_MODEL:-${CLAUDIBLE_MODEL_PREFIX}-claude-sonnet-4-6}"
+CLAUDIBLE_SONNET_MODEL="${CLAUDIBLE_SONNET_MODEL:-${CLAUDIBLE_MODEL_PREFIX}-claude-sonnet-4-6}"
+CLAUDIBLE_OPUS_MODEL="${CLAUDIBLE_OPUS_MODEL:-${CLAUDIBLE_MODEL_PREFIX}-claude-opus-4-6}"
+CLAUDIBLE_HAIKU_MODEL="${CLAUDIBLE_HAIKU_MODEL:-${CLAUDIBLE_MODEL_PREFIX}-claude-haiku-4-5}"
+CLAUDIBLE_TEST_MATRIX="${CLAUDIBLE_TEST_MATRIX:-0}"
+CLIPROXY_MODEL="${CLIPROXY_MODEL:-gpt-5.3-codex}"
 TELEGRAM_CHANNEL="${TELEGRAM_CHANNEL:-telegram}"
 TELEGRAM_TARGET="${TELEGRAM_TARGET:-}"
 SKIP_GPT="${SKIP_GPT:-0}"
 SKIP_MINIMAX="${SKIP_MINIMAX:-0}"
 SKIP_DANGLAMGIAU="${SKIP_DANGLAMGIAU:-0}"
+SKIP_CLAUDIBLE="${SKIP_CLAUDIBLE:-0}"
 SKIP_CLIPROXY="${SKIP_CLIPROXY:-0}"
 SKIP_TELEGRAM="${SKIP_TELEGRAM:-0}"
 
@@ -183,7 +208,8 @@ elif isinstance(reasoning, str) and reasoning.strip():
     text = reasoning.strip()
 if not text:
     text = "response received"
-print(f"model={model} snippet={text[:160].replace(chr(10), ' ')}")
+reasoning_flag = "yes" if isinstance(reasoning, str) and reasoning.strip() else "no"
+print(f"model={model} reasoning={reasoning_flag} snippet={text[:160].replace(chr(10), ' ')}")
 PY
 )"
   append_summary "PASS" "$label" "$snippet"
@@ -292,6 +318,28 @@ elif [[ "${DANGLAMGIAU_ENABLE:-0}" =~ ^(0|false|False|FALSE|no|No|NO|off|OFF)$ ]
   append_summary "SKIP" "DangLamGiau" "DANGLAMGIAU_ENABLE is disabled"
 else
   run_model_test "DangLamGiau" "$DANGLAMGIAU_MODEL" "Reply with exactly DLG_OK." ""
+  if [[ "$DANGLAMGIAU_TEST_MATRIX" == "1" ]]; then
+    run_model_test "DangLamGiau DeepSeek" "$DANGLAMGIAU_DEEPSEEK_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "DangLamGiau Claude Sonnet 4.6" "$DANGLAMGIAU_SONNET_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "DangLamGiau Claude Sonnet 4.6 Thinking" "$DANGLAMGIAU_SONNET_THINKING_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "DangLamGiau Claude Opus 4.6" "$DANGLAMGIAU_OPUS_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "DangLamGiau Claude Opus 4.6 Thinking" "$DANGLAMGIAU_OPUS_THINKING_MODEL" "What is 2+2? Reply with only 4." ""
+  fi
+fi
+
+if [[ "$SKIP_CLAUDIBLE" == "1" ]]; then
+  append_summary "SKIP" "Claudible" "SKIP_CLAUDIBLE=1"
+elif [[ -z "${CLAUDIBLE_API_KEY:-}" || -z "${CLAUDIBLE_API_BASE:-}" ]]; then
+  append_summary "SKIP" "Claudible" "CLAUDIBLE_API_KEY or CLAUDIBLE_API_BASE is empty"
+elif [[ "${CLAUDIBLE_ENABLE:-0}" =~ ^(0|false|False|FALSE|no|No|NO|off|OFF)$ ]]; then
+  append_summary "SKIP" "Claudible" "CLAUDIBLE_ENABLE is disabled"
+else
+  run_model_test "Claudible" "$CLAUDIBLE_MODEL" "Reply with exactly CLAUDIBLE_OK." ""
+  if [[ "$CLAUDIBLE_TEST_MATRIX" == "1" ]]; then
+    run_model_test "Claudible Claude Sonnet 4.6" "$CLAUDIBLE_SONNET_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "Claudible Claude Opus 4.6" "$CLAUDIBLE_OPUS_MODEL" "What is 2+2? Reply with only 4." ""
+    run_model_test "Claudible Claude Haiku 4.5" "$CLAUDIBLE_HAIKU_MODEL" "What is 2+2? Reply with only 4." ""
+  fi
 fi
 
 if [[ "$SKIP_CLIPROXY" == "1" ]]; then

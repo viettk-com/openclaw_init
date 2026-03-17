@@ -61,6 +61,7 @@ services:
       dockerfile: docker/openclaw-browser.Dockerfile
       args:
         OPENCLAW_BASE_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+        CLAUDE_CODE_TARGET: ${CLAUDE_CODE_TARGET:-stable}
     image: ${OPENCLAW_BROWSER_IMAGE:-openclaw-browser-local:latest}
     container_name: oc-openclaw-gateway
     restart: unless-stopped
@@ -81,6 +82,7 @@ services:
       - ./data/openclaw/config:/home/node/.openclaw
       - ./data/openclaw/workspace:/home/node/.openclaw/workspace
       - ./data/openclaw/cache/ms-playwright:/home/node/.cache/ms-playwright
+      - ./data/openclaw/claude:/home/node/.claude
       - ./scripts/openclaw-playwright-chrome.sh:/usr/local/bin/openclaw-playwright-chrome:ro
       - ./scripts/openclaw-gateway-start.sh:/usr/local/bin/openclaw-gateway-start:ro
     healthcheck:
@@ -102,6 +104,7 @@ services:
       dockerfile: docker/openclaw-browser.Dockerfile
       args:
         OPENCLAW_BASE_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+        CLAUDE_CODE_TARGET: ${CLAUDE_CODE_TARGET:-stable}
     image: ${OPENCLAW_BROWSER_IMAGE:-openclaw-browser-local:latest}
     container_name: oc-openclaw-cli
     depends_on:
@@ -125,6 +128,7 @@ services:
       - ./data/openclaw/config:/home/node/.openclaw
       - ./data/openclaw/workspace:/home/node/.openclaw/workspace
       - ./data/openclaw/cache/ms-playwright:/home/node/.cache/ms-playwright
+      - ./data/openclaw/claude:/home/node/.claude
       - ./scripts/openclaw-playwright-chrome.sh:/usr/local/bin/openclaw-playwright-chrome:ro
 
 networks:

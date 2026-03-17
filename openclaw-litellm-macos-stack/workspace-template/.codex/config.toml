@@ -1,0 +1,10 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+review_model = "gpt-5.3-codex"
+project_doc_fallback_filenames = ["README.md", "TONG_HOP_OPENCLAW_DOCKER_MACOS_VI.md"]
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = ["/Users/macos/Downloads/openclaw-litellm-macos-stack"]

@@ -1,9 +1,17 @@
 .env
+.DS_Store
 config/cliproxyapi-config.yaml
 data/postgres/
 data/openclaw/workspace/
 data/openclaw/cache/
+data/openclaw/claude/
+data/openclaw/config/agents/
+data/openclaw/config/canvas/
+data/openclaw/config/cron/
 data/openclaw/config/credentials/
 data/openclaw/config/devices/
 data/openclaw/config/identity/
+data/openclaw/config/logs/
+data/openclaw/config/openclaw.json
+data/openclaw/config/update-check.json
 data/cliproxyapi/auths/

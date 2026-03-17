@@ -2,23 +2,47 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "litellm/codex-oauth-gpt-5-1-codex"
+        "primary": "litellm/gpt-5.4"
       },
       "models": {
         "litellm/gpt-5.4": {
-          "alias": "GPT-5.4 via LiteLLM"
+          "alias": "GPT-5.4 via CLIProxyAPI/Codex OAuth"
         },
-        "litellm/codex-oauth-gpt-5-1-codex": {
-          "alias": "GPT-5.1 Codex via CLIProxyAPI"
+        "litellm/gpt-5.3-codex": {
+          "alias": "GPT-5.3 Codex via CLIProxyAPI/Codex OAuth"
         },
         "litellm/dlg-gpt-5-codex": {
           "alias": "GPT-5 Codex via DangLamGiau"
         },
-        "litellm/dlg-gpt-5-1-codex-max": {
-          "alias": "GPT-5.1 Codex Max via DangLamGiau"
+        "litellm/dlg-deepseek-3-2": {
+          "alias": "DeepSeek 3.2 via DangLamGiau"
         },
-        "litellm/gpt-5.1-codex": {
-          "alias": "GPT-5.1 Codex via LiteLLM"
+        "litellm/dlg-claude-sonnet-4-6": {
+          "alias": "Claude Sonnet 4.6 via DangLamGiau"
+        },
+        "litellm/dlg-claude-sonnet-4-6-thinking": {
+          "alias": "Claude Sonnet 4.6 Thinking via DangLamGiau"
+        },
+        "litellm/dlg-claude-opus-4-6": {
+          "alias": "Claude Opus 4.6 via DangLamGiau"
+        },
+        "litellm/dlg-claude-opus-4-6-thinking": {
+          "alias": "Claude Opus 4.6 Thinking via DangLamGiau"
+        },
+        "litellm/claudible-claude-sonnet-4-6": {
+          "alias": "Claude Sonnet 4.6 via Claudible"
+        },
+        "litellm/claudible-claude-opus-4-6": {
+          "alias": "Claude Opus 4.6 via Claudible"
+        },
+        "litellm/claudible-claude-haiku-4-5": {
+          "alias": "Claude Haiku 4.5 via Claudible"
+        },
+        "claude-cli/sonnet": {
+          "alias": "Claude Code Sonnet"
+        },
+        "claude-cli/opus": {
+          "alias": "Claude Code Opus"
         },
         "litellm/MiniMax-M2.5": {
           "alias": "MiniMax M2.5 via LiteLLM"
@@ -39,15 +63,15 @@
         "models": [
           {
             "id": "gpt-5.4",
-            "name": "GPT-5.4",
+            "name": "GPT-5.4 (CLIProxyAPI/Codex OAuth)",
             "reasoning": true,
             "input": ["text", "image"],
             "contextWindow": 1050000,
             "maxTokens": 128000
           },
           {
-            "id": "codex-oauth-gpt-5-1-codex",
-            "name": "GPT-5.1 Codex (CLIProxyAPI)",
+            "id": "gpt-5.3-codex",
+            "name": "GPT-5.3 Codex (CLIProxyAPI/Codex OAuth)",
             "reasoning": true,
             "input": ["text", "image"],
             "contextWindow": 400000,
@@ -62,20 +86,68 @@
             "maxTokens": 128000
           },
           {
-            "id": "dlg-gpt-5-1-codex-max",
-            "name": "GPT-5.1 Codex Max (DangLamGiau)",
-            "reasoning": true,
-            "input": ["text", "image"],
-            "contextWindow": 400000,
-            "maxTokens": 128000
+            "id": "dlg-deepseek-3-2",
+            "name": "DeepSeek 3.2 (DangLamGiau)",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 128000,
+            "maxTokens": 64000
           },
           {
-            "id": "gpt-5.1-codex",
-            "name": "GPT-5.1 Codex",
+            "id": "dlg-claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6 (DangLamGiau)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "dlg-claude-sonnet-4-6-thinking",
+            "name": "Claude Sonnet 4.6 Thinking (DangLamGiau)",
             "reasoning": true,
             "input": ["text", "image"],
-            "contextWindow": 400000,
-            "maxTokens": 128000
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "dlg-claude-opus-4-6",
+            "name": "Claude Opus 4.6 (DangLamGiau)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "dlg-claude-opus-4-6-thinking",
+            "name": "Claude Opus 4.6 Thinking (DangLamGiau)",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "claudible-claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6 (Claudible)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "claudible-claude-opus-4-6",
+            "name": "Claude Opus 4.6 (Claudible)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
+          },
+          {
+            "id": "claudible-claude-haiku-4-5",
+            "name": "Claude Haiku 4.5 (Claudible)",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "contextWindow": 200000,
+            "maxTokens": 16384
           },
           {
             "id": "MiniMax-M2.5",

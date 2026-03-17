@@ -13,16 +13,16 @@ set -a
 . ./.env
 set +a
 
-if [[ -z "${DANGLAMGIAU_API_KEY:-}" ]]; then
-  echo "DANGLAMGIAU_API_KEY is empty in .env"
+if [[ -z "${CLAUDIBLE_API_KEY:-}" ]]; then
+  echo "CLAUDIBLE_API_KEY is empty in .env"
   exit 1
 fi
 
-API_BASE="${DANGLAMGIAU_API_BASE:-https://danglamgiau.com/v1}"
+API_BASE="${CLAUDIBLE_API_BASE:-https://claudible.io/v1}"
 URL="${API_BASE%/}/models"
 
 RAW_JSON="$(curl -fsS "$URL" \
-  -H "Authorization: Bearer ${DANGLAMGIAU_API_KEY}" \
+  -H "Authorization: Bearer ${CLAUDIBLE_API_KEY}" \
   -H "Content-Type: application/json")"
 
 python3 - "$RAW_JSON" <<'PY'
