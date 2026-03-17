@@ -48,10 +48,15 @@ OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 OPENCLAW_CONTAINER="${OPENCLAW_CONTAINER:-oc-openclaw-gateway}"
 GPT_MODEL="${GPT_MODEL:-gpt-5.1-codex}"
 MINIMAX_MODEL="${MINIMAX_MODEL:-MiniMax-M2.5}"
+DANGLAMGIAU_MODEL_PREFIX="${DANGLAMGIAU_MODEL_PREFIX:-dlg}"
+DANGLAMGIAU_MODEL="${DANGLAMGIAU_MODEL:-${DANGLAMGIAU_MODEL_PREFIX}-gpt-5-codex}"
+CLIPROXY_MODEL="${CLIPROXY_MODEL:-codex-oauth-gpt-5-1-codex}"
 TELEGRAM_CHANNEL="${TELEGRAM_CHANNEL:-telegram}"
 TELEGRAM_TARGET="${TELEGRAM_TARGET:-}"
 SKIP_GPT="${SKIP_GPT:-0}"
 SKIP_MINIMAX="${SKIP_MINIMAX:-0}"
+SKIP_DANGLAMGIAU="${SKIP_DANGLAMGIAU:-0}"
+SKIP_CLIPROXY="${SKIP_CLIPROXY:-0}"
 SKIP_TELEGRAM="${SKIP_TELEGRAM:-0}"
 
 declare -a SUMMARY_LINES=()
@@ -277,6 +282,26 @@ elif [[ -z "${MINIMAX_API_KEY:-}" ]]; then
   append_summary "SKIP" "MiniMax" "no MINIMAX_API_KEY configured"
 else
   run_model_test "MiniMax" "$MINIMAX_MODEL" "Reply with exactly MINIMAX_OK." '{"reasoning_effort":"medium"}'
+fi
+
+if [[ "$SKIP_DANGLAMGIAU" == "1" ]]; then
+  append_summary "SKIP" "DangLamGiau" "SKIP_DANGLAMGIAU=1"
+elif [[ -z "${DANGLAMGIAU_API_KEY:-}" || -z "${DANGLAMGIAU_API_BASE:-}" ]]; then
+  append_summary "SKIP" "DangLamGiau" "DANGLAMGIAU_API_KEY or DANGLAMGIAU_API_BASE is empty"
+elif [[ "${DANGLAMGIAU_ENABLE:-0}" =~ ^(0|false|False|FALSE|no|No|NO|off|OFF)$ ]]; then
+  append_summary "SKIP" "DangLamGiau" "DANGLAMGIAU_ENABLE is disabled"
+else
+  run_model_test "DangLamGiau" "$DANGLAMGIAU_MODEL" "Reply with exactly DLG_OK." ""
+fi
+
+if [[ "$SKIP_CLIPROXY" == "1" ]]; then
+  append_summary "SKIP" "CLIProxyAPI" "SKIP_CLIPROXY=1"
+elif [[ -z "${CLIPROXY_API_KEY:-}" || -z "${CLIPROXY_API_BASE:-}" ]]; then
+  append_summary "SKIP" "CLIProxyAPI" "CLIPROXY_API_KEY or CLIPROXY_API_BASE is empty"
+elif [[ "${CLIPROXY_ENABLE:-1}" =~ ^(0|false|False|FALSE|no|No|NO|off|OFF)$ ]]; then
+  append_summary "SKIP" "CLIProxyAPI" "CLIPROXY_ENABLE is disabled"
+else
+  run_model_test "CLIProxyAPI" "$CLIPROXY_MODEL" "Reply with exactly CLIPROXY_OK." ""
 fi
 
 if [[ "$SKIP_TELEGRAM" == "1" ]]; then

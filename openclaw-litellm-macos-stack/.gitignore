@@ -1,6 +1,9 @@
-.DS_Store
 .env
-.env.local
-data/*
-!data/.gitkeep
-!data/README.md
+config/cliproxyapi-config.yaml
+data/postgres/
+data/openclaw/workspace/
+data/openclaw/cache/
+data/openclaw/config/credentials/
+data/openclaw/config/devices/
+data/openclaw/config/identity/
+data/cliproxyapi/auths/

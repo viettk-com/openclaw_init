@@ -56,7 +56,12 @@ services:
       - ai-internal
 
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    build:
+      context: .
+      dockerfile: docker/openclaw-browser.Dockerfile
+      args:
+        OPENCLAW_BASE_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    image: ${OPENCLAW_BROWSER_IMAGE:-openclaw-browser-local:latest}
     container_name: oc-openclaw-gateway
     restart: unless-stopped
     init: true
@@ -70,10 +75,14 @@ services:
       OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
-    command: ["node", "dist/index.js", "gateway", "--bind", "${OPENCLAW_GATEWAY_BIND:-lan}", "--port", "18789"]
+      PLAYWRIGHT_BROWSERS_PATH: /home/node/.cache/ms-playwright
+    command: ["/usr/local/bin/openclaw-gateway-start"]
     volumes:
       - ./data/openclaw/config:/home/node/.openclaw
       - ./data/openclaw/workspace:/home/node/.openclaw/workspace
+      - ./data/openclaw/cache/ms-playwright:/home/node/.cache/ms-playwright
+      - ./scripts/openclaw-playwright-chrome.sh:/usr/local/bin/openclaw-playwright-chrome:ro
+      - ./scripts/openclaw-gateway-start.sh:/usr/local/bin/openclaw-gateway-start:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -83,11 +92,17 @@ services:
     ports:
       - "${OPENCLAW_BIND_HOST:-127.0.0.1}:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BIND_HOST:-127.0.0.1}:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "${OPENCLAW_BIND_HOST:-127.0.0.1}:${OPENCLAW_BROWSER_RELAY_PORT:-18792}:18792"
     networks:
       - ai-internal
 
   openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    build:
+      context: .
+      dockerfile: docker/openclaw-browser.Dockerfile
+      args:
+        OPENCLAW_BASE_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    image: ${OPENCLAW_BROWSER_IMAGE:-openclaw-browser-local:latest}
     container_name: oc-openclaw-cli
     depends_on:
       openclaw-gateway:
@@ -105,9 +120,12 @@ services:
       OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       LITELLM_API_KEY: ${LITELLM_API_KEY:?set in .env}
+      PLAYWRIGHT_BROWSERS_PATH: /home/node/.cache/ms-playwright
     volumes:
       - ./data/openclaw/config:/home/node/.openclaw
       - ./data/openclaw/workspace:/home/node/.openclaw/workspace
+      - ./data/openclaw/cache/ms-playwright:/home/node/.cache/ms-playwright
+      - ./scripts/openclaw-playwright-chrome.sh:/usr/local/bin/openclaw-playwright-chrome:ro
 
 networks:
   ai-internal:
