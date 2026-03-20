@@ -21,6 +21,11 @@ Nó được thiết kế cho macOS, nhưng Compose này cũng chạy được t
 - `scripts/apply-claude-code.sh` — build lại image OpenClaw có kèm Claude Code CLI và verify binary trong container
 - `scripts/claude-code.sh` — chạy lệnh `claude ...` trực tiếp bên trong gateway container
 - `scripts/test-model.sh` — smoke test 1 lệnh cho GPT, MiniMax, CLIProxyAPI và Telegram end-to-end
+- `docker-compose.voice.yml` — overlay để chạy local STT + Telegram voice bot riêng
+- `voicebot-python/` — bot Telegram trung gian cho voice commands tiếng Việt
+- `scripts/download-whisper-model.sh` — tải model `whisper.cpp` vào `data/whisper/models`
+- `scripts/apply-voice-control.sh` — bật endpoint cần thiết của OpenClaw và dựng stack voice
+- `scripts/test-voice-control.sh` — self-test parser/bot + kiểm tra wiring compose/config cho voice stack
 - `data/*` — thư mục bind mount local cho OpenClaw / Postgres
 
 ## 1) Chuẩn bị
@@ -258,6 +263,78 @@ docker compose run --rm openclaw-cli models set claude-cli/sonnet
 
 Ghi chú vận hành:
 - Auth/session của Claude Code được giữ trong `data/openclaw/claude`, nên không mất sau mỗi lần restart container.
+
+## 13) Voice control qua Telegram (MVP theo hướng bot trung gian)
+
+Stack này đã có sẵn một đường triển khai thực dụng cho voice control tiếng Việt:
+- một bot Telegram riêng để nhận voice notes
+- `whisper.cpp` chạy local trong Docker để STT
+- gọi OpenClaw qua HTTP nội bộ trong docker network
+
+Thiết kế này tránh phụ thuộc vào việc transcript phải tự ra đúng dạng slash command. OpenClaw gốc vẫn giữ nguyên bot Telegram hiện có cho chat thường; voice control dùng bot token riêng để không giành cùng một luồng updates.
+
+### Thành phần mới
+
+- `docker-compose.voice.yml`
+- `voicebot-python/bot.py`
+- `scripts/download-whisper-model.sh`
+- `scripts/apply-voice-control.sh`
+- `scripts/test-voice-control.sh`
+
+### Biến môi trường cần thêm
+
+Trong `.env`, điền thêm:
+- `VOICEBOT_TELEGRAM_BOT_TOKEN`
+- `VOICEBOT_TELEGRAM_ALLOWLIST`
+- tùy chọn chỉnh `VOICEBOT_OPENCLAW_AGENT_ID`, `VOICEBOT_OPENCLAW_MODEL`
+- tùy chọn chỉnh `WHISPER_CPP_MODEL_NAME`, `WHISPER_CPP_MODEL_FILE`, `WHISPER_CPP_CPU_ARM_ARCH`
+
+Ghi chú quan trọng:
+- `VOICEBOT_TELEGRAM_BOT_TOKEN` phải là bot khác với `TELEGRAM_BOT_TOKEN`
+- voice bot hiện dùng `/v1/chat/completions` nội bộ để relay các lệnh slash đã map, nên script apply sẽ tự bật endpoint này trong cả template config và runtime config
+
+### Quickstart
+
+1. Tải model `whisper.cpp`:
+
+```bash
+./scripts/download-whisper-model.sh
+```
+
+Script này sẽ build một image `whisper.cpp` local từ source trước khi tải model, nên tránh được tình huống image prebuilt trên registry không khớp platform của Docker daemon hiện tại.
+Mặc định bot sẽ transcode voice note sang WAV trong container Python trước khi gửi sang `whisper-server`, nên container `whisper` không cần gánh thêm `ffmpeg`.
+
+2. Bật OpenClaw voice HTTP surface nội bộ và dựng các service voice:
+
+```bash
+./scripts/apply-voice-control.sh
+```
+
+3. Chạy self-test tĩnh:
+
+```bash
+./scripts/test-voice-control.sh
+```
+
+4. Nhắn vào bot voice mới bằng text hoặc voice:
+- `trạng thái`
+- `trợ giúp`
+- `chi phí`
+- `token`
+- `tôi là ai`
+- `model hiện tại`
+
+### Cách vận hành
+
+- `whisper` chỉ expose cổng trong docker network, không bind ra Internet
+- `voicebot-python` dùng long polling Telegram để đơn giản hoá deploy trên macOS Docker
+- `x-openclaw-agent-id` và session key riêng theo từng Telegram user được gửi nội bộ sang OpenClaw để tách context
+
+### Giới hạn MVP hiện tại
+
+- Intent parser hiện là rule-based, ưu tiên an toàn hơn là tự do
+- Nhóm lệnh mặc định đang tập trung vào read-only/low-risk operations
+- Nếu muốn hỗ trợ “nói tự nhiên” cho các hành động mutation như đổi model, restart, reset session, nên thêm xác nhận 2 bước trước khi mở rộng parser
 - Hướng tích hợp hiện tại là `OpenClaw CLI backend -> Claude Code CLI`, không phải `setup-token`.
 - CLI backends của OpenClaw là text-oriented; nếu sau này cần luồng coding harness/IDE sâu hơn thì cân nhắc đi tiếp sang ACP.
 

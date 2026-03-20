@@ -15,3 +15,4 @@ data/openclaw/config/logs/
 data/openclaw/config/openclaw.json
 data/openclaw/config/update-check.json
 data/cliproxyapi/auths/
+data/whisper/models/

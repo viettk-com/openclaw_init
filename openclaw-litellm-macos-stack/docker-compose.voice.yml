@@ -1,0 +1,71 @@
+services:
+  whisper:
+    build:
+      context: .
+      dockerfile: docker/whispercpp.Dockerfile
+      args:
+        WHISPER_CPP_REF: ${WHISPER_CPP_REF:-}
+        GGML_CPU_ARM_ARCH: ${WHISPER_CPP_CPU_ARM_ARCH:-armv8.2-a+fp16}
+    image: ${WHISPER_CPP_LOCAL_IMAGE:-openclaw-whispercpp-local:latest}
+    container_name: oc-whisper
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -lc
+      - >
+        set -e;
+        SERVER_BIN="$${WHISPER_CPP_SERVER_BIN:-/opt/whisper.cpp/build/bin/whisper-server}";
+        if [ ! -x "$$SERVER_BIN" ]; then
+          if command -v whisper-whisper-server >/dev/null 2>&1; then
+            SERVER_BIN="whisper-whisper-server";
+          elif command -v whisper-server >/dev/null 2>&1; then
+            SERVER_BIN="whisper-server";
+          else
+            echo "No whisper.cpp server binary found inside image (checked $$SERVER_BIN)." >&2;
+            exit 1;
+          fi;
+        fi;
+        exec "$$SERVER_BIN"
+        --host 0.0.0.0
+        --port 8080
+        --inference-path /inference
+        --language ${VOICEBOT_TRANSCRIBE_LANGUAGE:-vi}
+        --model /models/${WHISPER_CPP_MODEL_FILE:-ggml-base.bin}
+    volumes:
+      - ./data/whisper/models:/models:ro
+    expose:
+      - "8080"
+    networks:
+      - ai-internal
+
+  voicebot-python:
+    build:
+      context: ./voicebot-python
+    image: ${VOICEBOT_IMAGE:-openclaw-voicebot-python:local}
+    container_name: oc-voicebot-python
+    restart: unless-stopped
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+      whisper:
+        condition: service_started
+    environment:
+      VOICEBOT_TELEGRAM_BOT_TOKEN: ${VOICEBOT_TELEGRAM_BOT_TOKEN:?set in .env}
+      VOICEBOT_TELEGRAM_ALLOWLIST: ${VOICEBOT_TELEGRAM_ALLOWLIST:-}
+      VOICEBOT_OPENCLAW_BASE_URL: http://openclaw-gateway:18789
+      VOICEBOT_OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set in .env}
+      VOICEBOT_OPENCLAW_AGENT_ID: ${VOICEBOT_OPENCLAW_AGENT_ID:-main}
+      VOICEBOT_OPENCLAW_MODEL: ${VOICEBOT_OPENCLAW_MODEL:-openclaw:main}
+      VOICEBOT_OPENCLAW_SESSION_KEY_PREFIX: ${VOICEBOT_OPENCLAW_SESSION_KEY_PREFIX:-voicebot}
+      VOICEBOT_WHISPER_INFER_URL: http://whisper:8080/inference
+      VOICEBOT_TRANSCRIBE_LANGUAGE: ${VOICEBOT_TRANSCRIBE_LANGUAGE:-vi}
+      VOICEBOT_FORWARD_UNKNOWN_TO_CHAT: ${VOICEBOT_FORWARD_UNKNOWN_TO_CHAT:-0}
+      VOICEBOT_SEND_TRANSCRIPT_DEBUG: ${VOICEBOT_SEND_TRANSCRIPT_DEBUG:-0}
+      VOICEBOT_MAX_DURATION_SECONDS: ${VOICEBOT_MAX_DURATION_SECONDS:-30}
+      VOICEBOT_MAX_FILE_BYTES: ${VOICEBOT_MAX_FILE_BYTES:-20971520}
+      VOICEBOT_POLL_TIMEOUT_SECONDS: ${VOICEBOT_POLL_TIMEOUT_SECONDS:-30}
+      VOICEBOT_TRANSCODE_TO_WAV: ${VOICEBOT_TRANSCODE_TO_WAV:-1}
+      VOICEBOT_FFMPEG_SAMPLE_RATE: ${VOICEBOT_FFMPEG_SAMPLE_RATE:-16000}
+      VOICEBOT_FFMPEG_CHANNELS: ${VOICEBOT_FFMPEG_CHANNELS:-1}
+    networks:
+      - ai-internal
